@@ -1,0 +1,174 @@
+name: build ipa
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master )
+
+concurrency:
+  group: build-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  JAVA_VERSION: "17"
+  XCODE_VERSION: "26.2"
+  GRADLE_OPTS: >-
+    -Dorg.gradle.daemon=false
+    -Dorg.gradle.parallel=true
+    -Dorg.gradle.caching=true
+  KONAN_DATA_DIR: ${{ github.workspace }}/.konan-cache
+
+jobs:
+  build-ipa:
+    name: build ipa
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      GRADLE_OPTS: >-
+        -Dorg.gradle.daemon=false
+        -Dorg.gradle.parallel=true
+        -Dorg.gradle.caching=true
+        -Dorg.gradle.jvmargs=-Xmx6g
+        -Dkotlin.daemon.jvm.options=-Xmx6g
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Resolve version
+        id: version
+        run: |
+          set -euo pipefail
+          source scripts/resolve-version.sh
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "is_release=$IS_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "Resolved VERSION_NAME=$VERSION_NAME VERSION_CODE=$VERSION_CODE"
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: false
+
+      - name: Cache Kotlin/Native (Konan)
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ env.KONAN_DATA_DIR }}
+            ~/.konan
+          key: ${{ runner.os }}-xcode${{ env.XCODE_VERSION }}-konan-${{ hashFiles('gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties') }}-v4
+          restore-keys: |
+            ${{ runner.os }}-xcode${{ env.XCODE_VERSION }}-konan-v4-
+            ${{ runner.os }}-konan-v3-
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Show toolchain
+        run: |
+          java -version
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: |
+          if command -v xcodegen >/dev/null 2>&1; then
+            xcodegen --version
+          else
+            brew install xcodegen
+          fi
+
+      - name: Generate Xcode project
+        working-directory: iosApp
+        run: xcodegen generate
+
+      - name: Inject iOS marketing / build version
+        run: |
+          set -euo pipefail
+          PLIST="iosApp/iosApp/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION_NAME}" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION_CODE}" "$PLIST"
+
+      - name: Link Kotlin iOS device framework (Release)
+        run: >
+          ./gradlew :composeApp:linkReleaseFrameworkIosArm64
+          -Dorg.gradle.jvmargs="-Xmx6g -Dkotlin.daemon.jvm.options=-Xmx6g"
+          --stacktrace --build-cache --configuration-cache
+
+      - name: Build iOS app (unsigned Release, device arm64)
+        working-directory: iosApp
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project BetterMiFitnessSync.xcodeproj \
+            -scheme BetterMiFitnessSync \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath build/DerivedData \
+            -clonedSourcePackagesDirPath build/SourcePackages \
+            MARKETING_VERSION="${VERSION_NAME}" \
+            CURRENT_PROJECT_VERSION="${VERSION_CODE}" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            ONLY_ACTIVE_ARCH=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build
+
+      # Embed the HealthKit entitlement into the Mach-O code signature so that
+      # sideloaders (Impactor/SideStore) see it and register the capability
+      # with Apple. ad-hoc (-) needs no certificate and is enough to be read.
+      - name: Inject HealthKit entitlement (ad-hoc codesign)
+        working-directory: iosApp
+        run: |
+          set -euo pipefail
+          APP="build/DerivedData/Build/Products/Release-iphoneos/BetterMiFitnessSync.app"
+          EXE=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP/Info.plist")
+          BIN="$APP/$EXE"
+          echo "Injecting entitlements into: $BIN"
+          codesign --force --sign - \
+            --entitlements "iosApp.entitlements" \
+            "$BIN"
+          echo "--- embedded entitlements ---"
+          codesign --display --entitlements - "$BIN"
+
+      - name: Package IPA
+        run: |
+          set -euo pipefail
+          APP=$(find iosApp/build/DerivedData/Build/Products -path "*Release-iphoneos*/BetterMiFitnessSync.app" -type d | head -1)
+          if [ -z "$APP" ]; then
+            echo "Release app not found under DerivedData"
+            exit 1
+          fi
+          echo "Using app: $APP"
+          if [ -f "$APP/BetterMiFitnessSync.debug.dylib" ]; then
+            echo "Refusing to package Debug binary"
+            exit 1
+          fi
+          mkdir -p Payload dist
+          rm -rf Payload/*
+          cp -R "$APP" Payload/
+          zip -qry "dist/BetterMiFitnessSync.ipa" Payload
+          NAME="BetterMiFitnessSync-${{ steps.version.outputs.version_name }}.ipa"
+          cp "dist/BetterMiFitnessSync.ipa" "dist/${NAME}"
+          ls -lh dist/
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v6
+        with:
+          name: BetterMiFitnessSync-ios-ipa
+          path: dist/*.ipa
+          if-no-files-found: error
+          retention-days: 30
