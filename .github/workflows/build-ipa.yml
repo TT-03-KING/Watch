@@ -144,7 +144,7 @@ jobs:
           echo "--- embedded entitlements ---"
           codesign --display --entitlements - "$BIN"
 
-      - name: Package IPA
+      - name: Package IPA (fix Windows-illegal colon filenames)
         run: |
           set -euo pipefail
           APP=$(find iosApp/build/DerivedData/Build/Products -path "*Release-iphoneos*/BetterMiFitnessSync.app" -type d | head -1)
@@ -160,9 +160,28 @@ jobs:
           mkdir -p Payload dist
           rm -rf Payload/*
           cp -R "$APP" Payload/
-          zip -qry "dist/BetterMiFitnessSync.ipa" Payload
           NAME="BetterMiFitnessSync-${{ steps.version.outputs.version_name }}.ipa"
-          cp "dist/BetterMiFitnessSync.ipa" "dist/${NAME}"
+          RAW="dist/raw.ipa"
+          zip -qry "$RAW" Payload
+          # KMP/moko-resources produces "mi-fitness-app:composeApp.bundle" which
+          # contains ':' — illegal on Windows filesystems and breaks sideloader
+          # unpacking (os error 267). Rewrite the zip replacing ':' with '-'.
+          python3 - "$RAW" "dist/${NAME}" <<'PYEOF'
+          import sys, zipfile
+          src, dst = sys.argv[1], sys.argv[2]
+          zin = zipfile.ZipFile(src)
+          with zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED) as zout:
+              for item in zin.infolist():
+                  item.filename = item.filename.replace(
+                      'mi-fitness-app:composeApp.bundle',
+                      'mi-fitness-app-composeApp.bundle')
+                  zout.writestr(item, zin.read(item.filename))
+          zin.close()
+          bad = [n for n in zipfile.ZipFile(dst).namelist() if ':' in n]
+          assert not bad, f'illegal filenames remain: {bad[:3]}'
+          print('IPA rewritten, no illegal filenames')
+          PYEOF
+          rm -f "$RAW"
           ls -lh dist/
 
       - name: Upload IPA
