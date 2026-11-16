@@ -6,21 +6,6 @@
 name: Build APK and IPA
 
 on:
-  push:
-    branches: [main, master]
-    paths-ignore:
-      - "**/*.md"
-      - "LICENSE"
-      - "LICENSE.*"
-      - "docs/**"
-  pull_request:
-    branches: [main, master]
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths-ignore:
-      - "**/*.md"
-      - "LICENSE"
-      - "LICENSE.*"
-      - "docs/**"
   workflow_dispatch:
   workflow_call:
 
