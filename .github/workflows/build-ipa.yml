@@ -102,7 +102,7 @@ jobs:
 
       - name: Link Kotlin iOS device framework (Release)
         run: >
-          ./gradlew :composeApp:linkReleaseFrameworkIosArm64
+          bash ./gradlew :composeApp:linkReleaseFrameworkIosArm64
           -Dorg.gradle.jvmargs="-Xmx6g -Dkotlin.daemon.jvm.options=-Xmx6g"
           --stacktrace --build-cache --configuration-cache
 
