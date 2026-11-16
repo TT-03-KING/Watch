@@ -4,9 +4,7 @@ plugins {
 }
 
 kotlin {
-    // Targets matching composeApp so this module is usable from both platforms.
-    jvm("android")
-    // iosX64 dropped (Compose / KMP ecosystem no longer provides it).
+    // iOS-only: iosX64 dropped (Compose / KMP ecosystem no longer provides it).
     iosArm64()
     iosSimulatorArm64()
 
@@ -27,11 +25,6 @@ kotlin {
             implementation(libs.ktor.serialization.kotlinx.json)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
-        }
-
-        // Default hierarchy creates androidMain + iosMain automatically.
-        androidMain.dependencies {
-            implementation(libs.ktor.client.okhttp)
         }
 
         iosMain.dependencies {

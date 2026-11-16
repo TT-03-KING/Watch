@@ -1,38 +1,13 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinxSerialization)
-    alias(libs.plugins.androidMultiplatformLibrary)
     alias(libs.plugins.mokoResources)
 }
 
 kotlin {
-    // Android target via the official Android-KMP library plugin.
-    android {
-        namespace = "com.bettermifitness.sync.shared"
-        // API 37 preview platform is android-37.0 (see androidApp note).
-        // Must stay at 37+: coil3 3.6.x AAR metadata requires compileSdk 37 or later.
-        compileSdk {
-            version = release(37) {
-                minorApiLevel = 0
-            }
-        }
-        minSdk = 28
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-        // Required so composeResources pack into the Android library for the app module.
-        androidResources {
-            enable = true
-        }
-        // Run commonTest on the JVM (e.g. session-refresh policy tests) without a device.
-        withHostTest {}
-    }
-
-    // iosX64 dropped: Compose Multiplatform 1.11+ no longer ships iosX64 artifacts.
+    // iOS-only build (iosX64 dropped: Compose Multiplatform 1.11+ no longer ships iosX64 artifacts).
     listOf(
         iosArm64(),
         iosSimulatorArm64()
@@ -94,14 +69,6 @@ kotlin {
 
             implementation(libs.androidx.lifecycle.viewmodel)
             implementation(libs.androidx.lifecycle.runtime.compose)
-        }
-
-        androidMain.dependencies {
-            implementation(libs.ktor.client.okhttp)
-            implementation(libs.androidx.activity.compose)
-            implementation(libs.health.connect)
-            implementation(libs.androidx.work.runtime)
-            implementation(libs.androidx.lifecycle.process)
         }
 
         iosMain.dependencies {

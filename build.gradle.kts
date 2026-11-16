@@ -3,8 +3,6 @@ plugins {
     alias(libs.plugins.composeMultiplatform) apply false
     alias(libs.plugins.composeCompiler) apply false
     alias(libs.plugins.kotlinxSerialization) apply false
-    alias(libs.plugins.androidApplication) apply false
-    alias(libs.plugins.androidMultiplatformLibrary) apply false
     alias(libs.plugins.mokoResources) apply false
     alias(libs.plugins.detekt)
 }
@@ -18,7 +16,6 @@ detekt {
         files(
             "composeApp/src",
             "miclient/src",
-            "androidApp/src",
         ),
     )
     parallel = true
