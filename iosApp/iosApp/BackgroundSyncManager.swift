@@ -41,7 +41,9 @@ enum BackgroundSyncManager {
         }
 
         AutoSyncBridge.shared.setHandlers(
-            onSchedule: { schedule() },
+            onSchedule: { interval in
+                schedule(intervalMinutes: Int(interval))
+            },
             onScheduleRefresh: { scheduleRefresh() },
             onCancel: { cancel() },
             statusProvider: { backgroundRefreshStatusLabel() },
@@ -60,14 +62,19 @@ enum BackgroundSyncManager {
         #endif
     }
 
-    /// Asks iOS to schedule the next opportunistic refresh (earliest ~15 min)
-    /// plus a deferred processing run (network-required, no charger needed).
-    /// iOS treats earliestBeginDate as a floor, not a guarantee.
-    static func schedule() {
+    /// Asks iOS to schedule the next opportunistic refresh plus a deferred
+    /// processing run (network-required, no charger needed).
+    /// - Parameter intervalMinutes: desired minimum gap between refreshes.
+    ///   iOS treats earliestBeginDate as a floor, not a guarantee, and the
+    ///   OS opportunistically batches BGAppRefreshTask beyond it (rarely below
+    ///   ~15 min even when asked for less; 5/10-min background refresh is not
+    ///   achievable via BGTaskScheduler on iOS).
+    static func schedule(intervalMinutes: Int = 15) {
+        let floor = max(1, intervalMinutes)
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: taskIdentifier)
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: processingIdentifier)
         let refresh = BGAppRefreshTaskRequest(identifier: taskIdentifier)
-        refresh.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+        refresh.earliestBeginDate = Date(timeIntervalSinceNow: TimeInterval(floor * 60))
         do {
             try BGTaskScheduler.shared.submit(refresh)
             print("[BGSync] scheduled \(taskIdentifier)")

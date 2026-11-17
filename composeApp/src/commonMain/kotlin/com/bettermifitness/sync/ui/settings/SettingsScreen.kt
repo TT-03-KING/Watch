@@ -126,6 +126,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onLogout: (
                 AutoSyncCard(
                     state = state,
                     onAutoSyncChange = viewModel::setAutoSync,
+                    onIntervalChange = viewModel::setAutoSyncIntervalMinutes,
                     onTestBg = viewModel::runBackgroundRefreshTest,
                 )
                 WhatToSyncCard(
@@ -256,6 +257,7 @@ private fun HowFarBackCard(rangeDays: Int, onRangeSelected: (Int) -> Unit) {
 private fun AutoSyncCard(
     state: SettingsUiState,
     onAutoSyncChange: (Boolean) -> Unit,
+    onIntervalChange: (Int) -> Unit,
     onTestBg: () -> Unit,
 ) {
     SettingsGroup(title = L10n.string(L10n.settingsSectionAutoSync)) {
@@ -275,6 +277,23 @@ private fun AutoSyncCard(
             Switch(
                 checked = state.autoSync,
                 onCheckedChange = onAutoSyncChange,
+            )
+        }
+
+        if (state.autoSync) {
+            HorizontalDivider(
+                Modifier.padding(start = 14.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+            )
+            SyncIntervalSelector(
+                selectedMinutes = state.autoSyncIntervalMinutes,
+                onSelected = onIntervalChange,
+            )
+            Text(
+                L10n.string(L10n.settingsIntervalHint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
             )
         }
 
@@ -302,6 +321,43 @@ private fun AutoSyncCard(
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
                 )
             }
+        }
+    }
+}
+
+/** Selectable background auto-sync intervals, in minutes (iOS floor is 15). */
+private val AUTO_SYNC_INTERVAL_OPTIONS = listOf(15, 30, 60, 180, 360)
+
+@Composable
+private fun SyncIntervalSelector(
+    selectedMinutes: Int,
+    onSelected: (Int) -> Unit,
+) {
+    SingleChoiceSegmentedButtonRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        AUTO_SYNC_INTERVAL_OPTIONS.forEachIndexed { index, minutes ->
+            val label = when {
+                minutes < 60 -> L10n.stringFmt(L10n.settingsIntervalMinutes, minutes)
+                else -> L10n.stringFmt(L10n.settingsIntervalHours, minutes / 60)
+            }
+            SegmentedButton(
+                selected = selectedMinutes == minutes,
+                onClick = { onSelected(minutes) },
+                shape = SegmentedButtonDefaults.itemShape(
+                    index = index,
+                    count = AUTO_SYNC_INTERVAL_OPTIONS.size,
+                ),
+                label = {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                    )
+                },
+            )
         }
     }
 }

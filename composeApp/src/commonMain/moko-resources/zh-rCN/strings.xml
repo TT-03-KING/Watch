@@ -184,6 +184,9 @@
     <string name="settings_range_1_day">1 天</string>
     <string name="settings_range_n_days">%d 天</string>
     <string name="settings_background_auto_sync">后台自动同步</string>
+    <string name="settings_interval_minutes">%d 分钟</string>
+    <string name="settings_interval_hours">%d 小时</string>
+    <string name="settings_interval_hint">iOS 会在合适时机 opportunistic 地安排后台刷新，实际时间可能晚于所选间隔（系统最短 15 分钟）。</string>
     <string name="settings_test_background_refresh">测试后台刷新</string>
     <string name="settings_running_refresh">正在运行 1 天刷新…</string>
     <string name="settings_test_ok">测试通过 — 上次后台刷新应会更新</string>

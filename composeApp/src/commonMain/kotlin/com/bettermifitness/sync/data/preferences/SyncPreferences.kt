@@ -16,6 +16,15 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
+/** combine() has no 6-arg destructuring overload; this carries the inner tuple. */
+private data class Quadruple<A, B, C, D, E>(
+    val a: A,
+    val b: B,
+    val c: C,
+    val d: D,
+    val e: E,
+)
+
 /**
  * Process-wide scope for hot preference flows. Lives as long as the app;
  * cancelled only on process death (never in practice).
@@ -51,6 +60,15 @@ class SyncPreferences(
         it[AUTO_SYNC_KEY]?.toBooleanStrictOrNull() ?: false
     }
 
+    /**
+     * Desired minimum gap between background auto-syncs, in minutes.
+     * iOS treats this as [earliestBeginDate] — a floor the OS may exceed
+     * (opportunistic scheduling); values below 15 are clamped to 15.
+     */
+    val autoSyncIntervalMinutes: Flow<Int> = dataStore.data.map {
+        it[AUTO_SYNC_INTERVAL_KEY]?.toIntOrNull() ?: DEFAULT_AUTO_SYNC_INTERVAL_MINUTES
+    }.map { it.coerceAtLeast(MIN_AUTO_SYNC_INTERVAL_MINUTES) }
+
     override val enabledMetrics: Flow<Set<String>> = dataStore.data.map {
         it[ENABLED_METRICS_KEY] ?: ALL_METRIC_KEYS
     }
@@ -66,19 +84,26 @@ class SyncPreferences(
      * Sync/config writes still go through the suspend setters below.
      */
     val snapshot: StateFlow<UserPrefsSnapshot> = combine(
-        enabledMetrics,
-        syncRangeDays,
-        autoSync,
-        lastSyncTime,
-        lastBackgroundSyncTime,
-    ) { enabled, rangeDays, auto, lastSync, lastBg ->
+        autoSyncIntervalMinutes,
+        combine(
+            enabledMetrics,
+            syncRangeDays,
+            autoSync,
+            lastSyncTime,
+            lastBackgroundSyncTime,
+        ) { enabled, rangeDays, auto, lastSync, lastBg ->
+            // Inner tuple: combine() has no 6-arg overload with destructuring.
+            Quadruple(enabled, rangeDays, auto, lastSync, lastBg)
+        },
+    ) { interval, q ->
         UserPrefsSnapshot(
             ready = true,
-            enabledMetrics = enabled,
-            syncRangeDays = rangeDays,
-            autoSync = auto,
-            lastSyncTime = lastSync,
-            lastBackgroundSyncTime = lastBg,
+            enabledMetrics = q.a,
+            syncRangeDays = q.b,
+            autoSync = q.c,
+            autoSyncIntervalMinutes = interval,
+            lastSyncTime = q.d,
+            lastBackgroundSyncTime = q.e,
         )
     }.stateIn(
         scope = prefsScope,
@@ -120,6 +145,13 @@ class SyncPreferences(
         dataStore.edit { it[AUTO_SYNC_KEY] = enabled.toString() }
     }
 
+    suspend fun setAutoSyncIntervalMinutes(minutes: Int) {
+        dataStore.edit {
+            it[AUTO_SYNC_INTERVAL_KEY] =
+                minutes.coerceAtLeast(MIN_AUTO_SYNC_INTERVAL_MINUTES).toString()
+        }
+    }
+
     suspend fun setMetricEnabled(key: String, enabled: Boolean) {
         dataStore.edit { preferences ->
             val current = preferences[ENABLED_METRICS_KEY] ?: ALL_METRIC_KEYS
@@ -158,7 +190,12 @@ class SyncPreferences(
         private val LAST_BACKGROUND_SYNC_MESSAGE_KEY =
             stringPreferencesKey("last_background_sync_message")
         private val AUTO_SYNC_KEY = stringPreferencesKey("auto_sync")
+        private val AUTO_SYNC_INTERVAL_KEY = intPreferencesKey("auto_sync_interval_minutes")
         private val ENABLED_METRICS_KEY = stringSetPreferencesKey("enabled_metrics")
         private val SYNC_RANGE_DAYS_KEY = intPreferencesKey("sync_range_days")
+
+        /** iOS BGAppRefresh floor — the OS ignores smaller earliestBeginDate values. */
+        const val MIN_AUTO_SYNC_INTERVAL_MINUTES = 15
+        const val DEFAULT_AUTO_SYNC_INTERVAL_MINUTES = 15
     }
 }

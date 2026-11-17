@@ -211,6 +211,9 @@ object L10n {
     val settingsRange1Day get() = MR.strings.settings_range_1_day
     val settingsRangeNDays get() = MR.strings.settings_range_n_days
     val settingsBackgroundAutoSync get() = MR.strings.settings_background_auto_sync
+    val settingsIntervalMinutes get() = MR.strings.settings_interval_minutes
+    val settingsIntervalHours get() = MR.strings.settings_interval_hours
+    val settingsIntervalHint get() = MR.strings.settings_interval_hint
     val settingsTestBackgroundRefresh get() = MR.strings.settings_test_background_refresh
     val settingsRunningRefresh get() = MR.strings.settings_running_refresh
     val settingsTestOk get() = MR.strings.settings_test_ok

@@ -17,9 +17,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+/** Settings config bundle (avoid Triple indexing). */
+private data class SyncConfig(
+    val enabledMetrics: Set<String>,
+    val rangeDays: Int,
+    val autoSync: Boolean,
+    val intervalMinutes: Int,
+)
 
 data class SettingsUiState(
     /**
@@ -31,6 +40,8 @@ data class SettingsUiState(
     val prefsReady: Boolean = false,
     val rangeDays: Int = 7,
     val autoSync: Boolean = false,
+    /** Desired minimum gap between background auto-syncs, in minutes. */
+    val autoSyncIntervalMinutes: Int = 15,
     val lastBackgroundSyncLabel: String = L10n.text(L10n.homeNever),
     val lastBackgroundStatusTitle: String = L10n.text(L10n.outcomeNotSynced),
     val lastBackgroundDetail: String = L10n.text(L10n.outcomeIdleDetail),
@@ -96,7 +107,12 @@ class SettingsViewModel(
         prefsSnapshot,
     ) { snaps ->
         val snap = snaps[0]
-        Triple(snap.enabledMetrics, snap.syncRangeDays, snap.autoSync) to snap.ready
+        SyncConfig(
+            enabledMetrics = snap.enabledMetrics,
+            rangeDays = snap.syncRangeDays,
+            autoSync = snap.autoSync,
+            intervalMinutes = snap.autoSyncIntervalMinutes,
+        ) to snap.ready
     }
 
     val uiState: StateFlow<SettingsUiState> = combine(
@@ -107,10 +123,11 @@ class SettingsViewModel(
         healthState,
     ) { config, lastSync, lastBg, local, health ->
         SettingsUiState(
-            enabledMetrics = config.first.first,
+            enabledMetrics = config.first.enabledMetrics,
             prefsReady = config.second,
-            rangeDays = config.first.second,
-            autoSync = config.first.third,
+            rangeDays = config.first.rangeDays,
+            autoSync = config.first.autoSync,
+            autoSyncIntervalMinutes = config.first.intervalMinutes,
             lastBackgroundSyncLabel = RelativeTime.format(lastBg.first),
             lastBackgroundStatusTitle = SyncOutcomeLabels.title(lastBg.second),
             lastBackgroundDetail = SyncOutcomeLabels.detail(lastBg.second, lastBg.third),
@@ -192,11 +209,26 @@ class SettingsViewModel(
         viewModelScope.launch {
             syncPreferences.setAutoSync(enabled)
             if (enabled) {
-                AutoSyncPlatform.scheduleBackgroundRefresh()
+                val interval = syncPreferences.autoSyncIntervalMinutes.first()
+                AutoSyncPlatform.scheduleBackgroundRefresh(interval)
             } else {
                 AutoSyncPlatform.cancelBackgroundRefresh()
                 // Staying logged in must not depend on the data-sync toggle.
                 AutoSyncPlatform.scheduleSessionRefresh()
+            }
+        }
+    }
+
+    /**
+     * Persists the desired background auto-sync interval and re-schedules the
+     * BG task with the new value. No-op re-scheduling when auto-sync is off.
+     */
+    fun setAutoSyncIntervalMinutes(minutes: Int) {
+        viewModelScope.launch {
+            syncPreferences.setAutoSyncIntervalMinutes(minutes)
+            if (uiState.value.autoSync) {
+                val clamped = syncPreferences.autoSyncIntervalMinutes.first()
+                AutoSyncPlatform.scheduleBackgroundRefresh(clamped)
             }
         }
     }

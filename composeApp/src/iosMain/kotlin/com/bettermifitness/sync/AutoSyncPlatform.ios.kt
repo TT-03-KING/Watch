@@ -5,8 +5,8 @@ package com.bettermifitness.sync
  * Kotlin Settings can schedule/cancel BGAppRefresh and read status.
  */
 actual object AutoSyncPlatform {
-    actual fun scheduleBackgroundRefresh() {
-        AutoSyncBridge.invokeSchedule()
+    actual fun scheduleBackgroundRefresh(intervalMinutes: Int) {
+        AutoSyncBridge.invokeSchedule(intervalMinutes)
     }
 
     actual fun scheduleSessionRefresh() {
@@ -41,14 +41,14 @@ actual object AutoSyncPlatform {
  * BGTaskScheduler without importing Swift types into Kotlin.
  */
 object AutoSyncBridge {
-    private var onSchedule: (() -> Unit)? = null
+    private var onSchedule: ((Int) -> Unit)? = null
     private var onScheduleRefresh: (() -> Unit)? = null
     private var onCancel: (() -> Unit)? = null
     private var statusProvider: (() -> String)? = null
     private var supportsDebugTest: (() -> Boolean)? = null
 
     fun setHandlers(
-        onSchedule: (() -> Unit)?,
+        onSchedule: ((Int) -> Unit)?,
         onScheduleRefresh: (() -> Unit)?,
         onCancel: (() -> Unit)?,
         statusProvider: (() -> String)?,
@@ -61,8 +61,8 @@ object AutoSyncBridge {
         this.supportsDebugTest = supportsDebugTest
     }
 
-    fun invokeSchedule() {
-        onSchedule?.invoke()
+    fun invokeSchedule(intervalMinutes: Int) {
+        onSchedule?.invoke(intervalMinutes)
     }
 
     fun invokeScheduleRefresh() {

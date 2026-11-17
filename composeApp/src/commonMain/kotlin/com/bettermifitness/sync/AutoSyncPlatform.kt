@@ -4,8 +4,12 @@ package com.bettermifitness.sync
  * iOS bridges for system background refresh and status. No-ops on Android.
  */
 expect object AutoSyncPlatform {
-    /** Ask the OS to schedule the next opportunistic background refresh. */
-    fun scheduleBackgroundRefresh()
+    /**
+     * Ask the OS to schedule the next opportunistic background refresh.
+     * [intervalMinutes] is the desired minimum gap (iOS earliestBeginDate floor);
+     * the OS decides the actual firing time and may exceed it.
+     */
+    fun scheduleBackgroundRefresh(intervalMinutes: Int)
 
     /**
      * Keep the passport session alive independent of [scheduleBackgroundRefresh].

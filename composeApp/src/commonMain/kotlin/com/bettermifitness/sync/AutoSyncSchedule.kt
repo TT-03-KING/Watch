@@ -27,13 +27,16 @@ object AutoSyncSchedule {
     }
 
     private suspend fun rescheduleIfEnabledSuspend() {
-        val enabled = try {
-            KoinPlatform.getKoin().get<SyncPreferences>().autoSync.first()
+        val prefs = try {
+            KoinPlatform.getKoin().get<SyncPreferences>()
         } catch (_: Exception) {
-            false
+            null
         }
+        val enabled = prefs?.autoSync?.first() ?: false
         if (enabled) {
-            AutoSyncPlatform.scheduleBackgroundRefresh()
+            val intervalMinutes = prefs?.autoSyncIntervalMinutes?.first()
+                ?: SyncPreferences.DEFAULT_AUTO_SYNC_INTERVAL_MINUTES
+            AutoSyncPlatform.scheduleBackgroundRefresh(intervalMinutes)
         } else {
             AutoSyncPlatform.cancelBackgroundRefresh()
         }

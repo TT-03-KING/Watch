@@ -48,6 +48,8 @@ data class UserPrefsSnapshot(
     val enabledMetrics: Set<String> = emptySet(),
     val syncRangeDays: Int = 7,
     val autoSync: Boolean = false,
+    /** Desired minimum gap between background auto-syncs, in minutes (OS floor: 15). */
+    val autoSyncIntervalMinutes: Int = 15,
     val lastSyncTime: String? = null,
     val lastBackgroundSyncTime: String? = null,
 )
