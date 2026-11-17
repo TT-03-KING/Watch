@@ -66,8 +66,9 @@ class SyncPreferences(
      * (opportunistic scheduling); values below 15 are clamped to 15.
      */
     val autoSyncIntervalMinutes: Flow<Int> = dataStore.data.map {
-        it[AUTO_SYNC_INTERVAL_KEY]?.toIntOrNull() ?: DEFAULT_AUTO_SYNC_INTERVAL_MINUTES
-    }.map { it.coerceAtLeast(MIN_AUTO_SYNC_INTERVAL_MINUTES) }
+        (it[AUTO_SYNC_INTERVAL_KEY] ?: DEFAULT_AUTO_SYNC_INTERVAL_MINUTES)
+            .coerceAtLeast(MIN_AUTO_SYNC_INTERVAL_MINUTES)
+    }
 
     override val enabledMetrics: Flow<Set<String>> = dataStore.data.map {
         it[ENABLED_METRICS_KEY] ?: ALL_METRIC_KEYS
@@ -148,7 +149,7 @@ class SyncPreferences(
     suspend fun setAutoSyncIntervalMinutes(minutes: Int) {
         dataStore.edit {
             it[AUTO_SYNC_INTERVAL_KEY] =
-                minutes.coerceAtLeast(MIN_AUTO_SYNC_INTERVAL_MINUTES).toString()
+                minutes.coerceAtLeast(MIN_AUTO_SYNC_INTERVAL_MINUTES)
         }
     }
 
